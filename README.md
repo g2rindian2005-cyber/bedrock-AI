@@ -42,23 +42,102 @@ flowchart TD
   `ChatBedrockConverse` and returns a structured analysis (summary,
   evidence, root cause, recommended fix, confidence).
 
-## Setup
+
+
+
+
+  # Setup Commands
+
+## 1. IAM Role
+
+Attach an IAM role to the EC2 instance with:
 
 ```bash
+AdministratorAccess
+```
+
+---
+
+## 2. Clone Repository
+
+```bash
+yum install git -y
+
+git clone <REPOSITORY-URL>
+
+cd <REPOSITORY-DIRECTORY>
+```
+
+---
+
+## 3. Install Required Packages
+
+```bash
+yum install python3-pip -y
+
+curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
+
+yum install -y nodejs
+
+npm install -g pm2
+```
+
+---
+
+## 4. Main Application
+
+```bash
+cd webapp
+
+python3 -m venv venv
+
+source venv/bin/activate
+
+pip install --upgrade pip
+
 pip install -r requirements.txt
-python app.py
+
+python3 app.py
 ```
 
-This starts Streamlit listening on `0.0.0.0:8082`, so the UI is
-reachable at `http://<host-ip>:8082`. Equivalent manual command:
+---
+
+## 5. CloudWatch Agent and Log Group
 
 ```bash
-streamlit run app.py --server.address 0.0.0.0 --server.port 8082
+sh user-data.sh
+```
+
+---
+
+## 6. Bedrock UI
+
+Open another terminal and connect to the same EC2 server.
+
+```bash
+cd <REPOSITORY-DIRECTORY>
+
+python3 -m venv venv_bedrock
+
+source venv_bedrock/bin/activate
+
+pip install --upgrade pip
+
+pip install -r requirements.txt
+```
+
+---
+
+## 7. Start Bedrock UI with PM2
+
+```bash
+pm2 start app.py --name bedrock
+
+pm2 status
+
+pm2 logs bedrock
 ```
 
 
-Requires AWS credentials configured locally (`aws configure` or
-environment variables) with permissions for:
-- `logs:DescribeLogGroups`
-- `logs:FilterLogEvents`
-- `bedrock:InvokeModel` (for `amazon.nova-lite-v1:0` in the selected region)
+
+` (for `amazon.nova-lite-v1:0` in the selected region)
