@@ -1,104 +1,65 @@
 """
-Log Forge - EC2 web app that manufactures backdated application logs.
+Multicloud DevOps Portal
+by Veera Sir, NIT
 
-Every browser hit generates events across the last N days (today, yesterday, the
-day before...), appends them to per-date files, and streams them to CloudWatch
-Logs in the background. That is all it does.
-
-This app never calls Bedrock. Analysis is a separate, deliberate step: run
-02_direct_analysis/analyze_logs.py against the log group once logs are flowing.
+A small Flask app that records real access logs and error logs for every
+request it serves, and writes them to local files on the server only.
+No fake/synthetic log generation, no external log shipping, and the logs
+are never exposed through the website itself.
 
     python app.py                          # http://localhost:8080
-    LOG_DIR=./logs SHIP_TO_CLOUDWATCH=0 python app.py    # local, no AWS
+    LOG_DIR=./logs python app.py           # choose a different log directory
 
-SECURITY: there is no authentication unless APP_TOKEN is set. See the note in
-create_app() and the README before exposing this to 0.0.0.0.
+SECURITY: there is no authentication unless APP_TOKEN is set in the
+environment. Restrict network access (firewall / security group) to trusted
+sources, or set APP_TOKEN, before exposing this beyond localhost.
 """
 
 from __future__ import annotations
 
 import hmac
+import logging
 import os
-import random
-import sys
-import threading
+import time
+import uuid
 from datetime import datetime, timezone
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-import boto3
-from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
-from flask import Flask, jsonify, make_response, render_template, request
-
-sys.path.insert(0, str(Path(__file__).parent))
-
-from generator import MAX_DAYS_BACK, ROUTES, generate_visit, window_summary  # noqa: E402
-from shipper import CloudWatchShipper, LogFileWriter, NullShipper  # noqa: E402
+from flask import Flask, g, jsonify, render_template, request
 
 LOG_DIR = os.environ.get("LOG_DIR", "/var/log/myapp")
-LOG_GROUP = os.environ.get("LOG_GROUP", "/workshop/app/logs")
-REGION = os.environ.get("AWS_REGION", "us-east-1")
-DAYS_BACK = min(int(os.environ.get("DAYS_BACK", "7")), MAX_DAYS_BACK)
-SHIP = os.environ.get("SHIP_TO_CLOUDWATCH", "1") == "1"
-# Built-in default so the app is gated without touching /etc/logforge.env.
-# `or` rather than a get() default on purpose: the systemd EnvironmentFile ships
-# APP_TOKEN= (empty), and an empty value would otherwise disable the gate.
-# This value is committed to git, so treat it as a speed bump, not a secret -
-# the security group is what actually protects this instance.
 APP_TOKEN = os.environ.get("APP_TOKEN") or ""
+MAX_LOG_BYTES = int(os.environ.get("MAX_LOG_BYTES", 10 * 1024 * 1024))  # 10 MB per file
+BACKUP_COUNT = int(os.environ.get("LOG_BACKUP_COUNT", 5))
 
 
-def instance_id() -> str:
-    """IMDSv2, with a local fallback so the app runs off-EC2 too."""
-    if os.environ.get("INSTANCE_ID"):
-        return os.environ["INSTANCE_ID"]
-    try:
-        import urllib.request
-
-        req = urllib.request.Request(
-            "http://169.254.169.254/latest/api/token",
-            method="PUT",
-            headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
+def _build_logger(name: str, filename: str) -> logging.Logger:
+    """File-only logger; rotates locally so disk usage stays bounded."""
+    Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    if not logger.handlers:
+        handler = RotatingFileHandler(
+            Path(LOG_DIR) / filename, maxBytes=MAX_LOG_BYTES, backupCount=BACKUP_COUNT
         )
-        token = urllib.request.urlopen(req, timeout=1).read().decode()
-        req = urllib.request.Request(
-            "http://169.254.169.254/latest/meta-data/instance-id",
-            headers={"X-aws-ec2-metadata-token": token},
-        )
-        return urllib.request.urlopen(req, timeout=1).read().decode()
-    except Exception:
-        return f"local-{os.uname().nodename if hasattr(os, 'uname') else 'dev'}"
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        logger.addHandler(handler)
+    return logger
 
 
-def build_shipper():
-    if not SHIP:
-        return NullShipper("shipping disabled (SHIP_TO_CLOUDWATCH=0)")
-    try:
-        client = boto3.client("logs", region_name=REGION)
-        shipper = CloudWatchShipper(client, LOG_GROUP, instance_id())
-        shipper.start()
-        return shipper
-    except (NoCredentialsError, ClientError, BotoCoreError) as err:
-        return NullShipper(f"CloudWatch unavailable: {err}"[:300])
+access_logger = _build_logger("access", "access.log")
+error_logger = _build_logger("error", "error.log")
 
 
 def create_app() -> Flask:
     app = Flask(__name__)
-    writer = LogFileWriter(LOG_DIR)
-    shipper = build_shipper()
-    rng = random.Random()
-    lock = threading.Lock()
-    state = {"visits": 0, "generated": 0, "started": datetime.now(tz=timezone.utc)}
 
     if not APP_TOKEN:
         app.logger.warning(
             "APP_TOKEN is not set - every endpoint is open to anyone who can reach "
-            "this port. Restrict the security group to your own IP, or set APP_TOKEN."
-        )
-    elif APP_TOKEN == "veera@123":
-        app.logger.warning(
-            "APP_TOKEN is the built-in default, which is public in the git repo. "
-            "Anyone who reads the source can get in. Override it in "
-            "/etc/logforge.env and restrict the security group to your own IP."
+            "this port. Restrict network access to trusted sources, or set APP_TOKEN."
         )
 
     # ---------------- auth (opt-in) ---------------- #
@@ -125,99 +86,124 @@ def create_app() -> Flask:
         resp.headers["X-Frame-Options"] = "DENY"
         return resp
 
-    # ---------------- log generation ---------------- #
-    def do_visit(route: str) -> dict:
-        events = generate_visit(route, days_back=DAYS_BACK, rng=rng)
-        per_day = writer.write(events)
-        queued = shipper.enqueue(events)
-        with lock:
-            state["visits"] += 1
-            state["generated"] += len(events)
-        levels: dict[str, int] = {}
-        for ev in events:
-            levels[ev.level] = levels.get(ev.level, 0) + 1
-        return {
-            "route": route,
-            "events_generated": len(events),
-            "days_touched": len(per_day),
-            "per_day": dict(sorted(per_day.items(), reverse=True)),
-            "by_level": levels,
-            "cloudwatch": queued,
-        }
+    # ---------------- real access/error logging ---------------- #
+    @app.before_request
+    def start_timer():
+        g._start = time.monotonic()
+        g._request_id = uuid.uuid4().hex[:12]
+
+    @app.after_request
+    def log_access(resp):
+        duration_ms = int((time.monotonic() - getattr(g, "_start", time.monotonic())) * 1000)
+        access_logger.info(
+            "request_id=%s %s %s %s %s latency_ms=%d ip=%s",
+            getattr(g, "_request_id", "-"),
+            request.method,
+            request.path,
+            resp.status_code,
+            request.headers.get("User-Agent", "-"),
+            duration_ms,
+            request.headers.get("X-Forwarded-For", request.remote_addr or "-"),
+        )
+        return resp
+
+    @app.errorhandler(Exception)
+    def log_error(err):
+        error_logger.exception(
+            "request_id=%s %s %s error=%s",
+            getattr(g, "_request_id", "-"),
+            request.method,
+            request.path,
+            err,
+        )
+        code = getattr(err, "code", 500)
+        if not isinstance(code, int):
+            code = 500
+        return jsonify(error="internal_error", request_id=getattr(g, "_request_id", "-")), code
 
     # ---------------- routes ---------------- #
     @app.get("/")
     def index():
-        # Loading the page is itself an access, so it generates logs.
-        result = do_visit("/")
-        html = render_template(
-            "index.html",
-            days_back=DAYS_BACK,
-            log_group=LOG_GROUP,
-            region=REGION,
-            routes=ROUTES,
-            boot=result,
-        )
-        return make_response(html)
+        return render_template("index.html")
 
-    @app.post("/api/visit")
-    def api_visit():
-        route = (request.json or {}).get("route", "/api/orders")
-        if route not in ROUTES and route != "/":
-            return jsonify(error=f"unknown route {route}"), 400
-        return jsonify(do_visit(route))
-
-    @app.post("/api/burst")
-    def api_burst():
-        """Several visits at once, for filling a window quickly."""
-        n = max(1, min(int((request.json or {}).get("count", 10)), 100))
-        total, per_day = 0, {}
-        for _ in range(n):
-            r = do_visit(rng.choice(ROUTES))
-            total += r["events_generated"]
-            for day, count in r["per_day"].items():
-                per_day[day] = per_day.get(day, 0) + count
-        return jsonify(visits=n, events_generated=total,
-                       per_day=dict(sorted(per_day.items(), reverse=True)))
-
-    @app.get("/api/stats")
-    def api_stats():
-        now = datetime.now(tz=timezone.utc)
-        counts = writer.day_counts()
-        days = []
-        for day in window_summary(DAYS_BACK, now):
-            days.append({**day, "events": counts.get(day["date"], 0)})
+    @app.get("/api/status")
+    def api_status():
         return jsonify(
-            log_group=LOG_GROUP,
-            region=REGION,
-            log_dir=LOG_DIR,
-            instance=instance_id(),
-            days_back=DAYS_BACK,
-            visits=state["visits"],
-            events_generated=state["generated"],
-            uptime_seconds=int((now - state["started"]).total_seconds()),
-            days=days,
-            older_files={k: v for k, v in counts.items()
-                         if k not in {d["date"] for d in days}},
-            shipper=shipper.stats,
+            app="Multicloud DevOps Portal",
+            author="Veera Sir, NIT",
+            status="ok",
+            time=datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+            endpoints=["/health", "/api/status", "/api/logs/access", "/api/logs/error"],
         )
-
-    @app.get("/api/logs")
-    def api_logs():
-        day = request.args.get("date") or datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
-        try:
-            datetime.strptime(day, "%Y-%m-%d")
-        except ValueError:
-            return jsonify(error="date must be YYYY-MM-DD"), 400
-        limit = max(1, min(int(request.args.get("limit", 200)), 2000))
-        return jsonify(date=day, lines=writer.tail(day, limit),
-                       file=str(writer.path_for(day)))
 
     @app.get("/health")
     def health():
-        return jsonify(status="ok", shipping=shipper.stats["enabled"])
+        return jsonify(status="ok")
 
-    app.config["SHIPPER"] = shipper
+    # ---------------- database connectivity check ---------------- #
+    @app.post("/api/db/test")
+    def api_db_test():
+        payload = request.get_json(silent=True) or {}
+        engine = str(payload.get("engine", "")).lower()
+        host = str(payload.get("host", "")).strip()
+        port = payload.get("port")
+        user = str(payload.get("user", "")).strip()
+        password = str(payload.get("password", ""))
+        database = str(payload.get("database", "")).strip()
+
+        if engine not in ("mysql", "postgres", "postgresql"):
+            return jsonify(error="engine must be 'mysql' or 'postgres'"), 400
+        if not host or not user or not database:
+            return jsonify(error="host, user, and database are required"), 400
+
+        request_id = getattr(g, "_request_id", "-")
+        # Never log the password. Only non-secret connection details.
+        target = f"engine={engine} host={host} port={port} db={database} user={user}"
+
+        try:
+            elapsed_ms = _test_db_connection(engine, host, port, user, password, database)
+        except Exception as err:  # noqa: BLE001 - surface any driver error as a connection failure
+            error_logger.error(
+                "request_id=%s db_connect_failed %s error=%s",
+                request_id, target, err,
+            )
+            return jsonify(ok=False, error=str(err)), 200
+
+        access_logger.info(
+            "request_id=%s db_connect_ok %s latency_ms=%d",
+            request_id, target, elapsed_ms,
+        )
+        return jsonify(ok=True, message="Connection successful", latency_ms=elapsed_ms)
+
+    def _test_db_connection(engine: str, host: str, port, user: str, password: str, database: str) -> int:
+        """Attempt a real DB connection. Returns latency in ms, or raises on failure."""
+        start = time.monotonic()
+        if engine == "mysql":
+            import pymysql
+
+            conn = pymysql.connect(
+                host=host,
+                port=int(port) if port else 3306,
+                user=user,
+                password=password,
+                database=database,
+                connect_timeout=5,
+            )
+            conn.close()
+        else:  # postgres / postgresql
+            import pg8000
+
+            conn = pg8000.connect(
+                host=host,
+                port=int(port) if port else 5432,
+                user=user,
+                password=password,
+                database=database,
+                timeout=5,
+            )
+            conn.close()
+        return int((time.monotonic() - start) * 1000)
+
     return app
 
 
@@ -226,6 +212,5 @@ app = create_app()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8080"))
     host = os.environ.get("HOST", "0.0.0.0")
-
-    print(f"Log Forge on http://{host}:{port}  (log group {LOG_GROUP}, {DAYS_BACK} days back)")
+    print(f"Multicloud DevOps Portal on http://{host}:{port}  (logs -> {LOG_DIR})")
     app.run(host=host, port=port, threaded=True)

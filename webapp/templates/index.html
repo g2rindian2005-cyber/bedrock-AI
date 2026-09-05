@@ -3,80 +3,210 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Log Forge — backdated log generator</title>
+<title>Multicloud DevOps Portal</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body
-  data-days-back="{{ days_back }}"
-  data-log-group="{{ log_group }}"
-  data-region="{{ region }}">
+<body>
 
 <a class="skip" href="#main">Skip to main content</a>
 
+<div class="bg-orbits" aria-hidden="true">
+  <span class="orbit orbit-1"></span>
+  <span class="orbit orbit-2"></span>
+  <span class="orbit orbit-3"></span>
+</div>
+
+<canvas id="neural-bg" aria-hidden="true"></canvas>
+
 <header class="topbar">
   <div class="brand">
-    <span class="mark" aria-hidden="true">◆</span>
+    <span class="mark spin" aria-hidden="true">◆</span>
     <div>
-      <h1>Log Forge</h1>
-      <p class="tag">Every visit writes logs across the last {{ days_back }} days &rarr; CloudWatch</p>
+      <h1>Multicloud DevOps Portal</h1>
+      <p class="tag">by Veera Sir, NIT</p>
     </div>
   </div>
-  <dl class="meta">
-    <div><dt>Log group</dt><dd>{{ log_group }}</dd></div>
-    <div><dt>Region</dt><dd>{{ region }}</dd></div>
-  </dl>
-  <p id="ship-pill" class="pill" role="status">
-    <span class="dot" aria-hidden="true"></span><span id="ship-text">connecting…</span>
+  <p id="health-pill" class="pill" role="status">
+    <span class="dot" aria-hidden="true"></span><span id="health-text">checking…</span>
   </p>
 </header>
 
 <main id="main">
 
-  <section class="panel controls" aria-labelledby="h-generate">
-    <h2 id="h-generate">Generate traffic</h2>
-    <p class="hint">
-      Each hit produces events on <strong>every</strong> day in the window, not just today.
-      Page load already generated <strong>{{ boot.events_generated }}</strong> events
-      across <strong>{{ boot.days_touched }}</strong> dates.
+  <section class="hero">
+    <p class="eyebrow"><span class="eyebrow-dot"></span>GenAI &amp; Agentic AI powered</p>
+    <h2 class="hero-title">
+      <span class="gradient-text">Build. Ship. Scale.</span><br>
+      Across every cloud.
+    </h2>
+    <p class="hero-sub">
+      One unified DevOps control plane spanning AWS, Azure, and Google Cloud —
+      automated pipelines, autonomous AI agents, live infrastructure, zero downtime.
     </p>
+  </section>
 
-    <div class="routes" role="group" aria-label="Simulate a request to an endpoint">
-      {% for r in routes %}
-      <button class="btn route" data-route="{{ r }}">{{ r }}</button>
-      {% endfor %}
-    </div>
-
-    <div class="burst">
-      <label for="burst-count">Burst size
-        <output id="burst-out" for="burst-count">10</output> visits
-      </label>
-      <input type="range" id="burst-count" min="1" max="60" value="10" step="1">
-      <button class="btn primary" id="burst-go">Run burst</button>
+  <section class="terminal-wrap" aria-label="AI agent live console">
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+        <span class="terminal-title">agentic-ai · devops-copilot</span>
+      </div>
+      <pre class="terminal-body" id="terminal-body"></pre>
     </div>
   </section>
 
-  <section class="panel" aria-labelledby="h-timeline">
-    <h2 id="h-timeline">Log volume by date</h2>
-    <p class="hint">
-      Each date has a fixed character, so the same day always tells the same story.
-      <span class="badge incident">incident</span>
-      <span class="badge degraded">degraded</span>
-      <span class="badge healthy">healthy</span>
-    </p>
-    <ol class="timeline" id="timeline" aria-live="polite"></ol>
-    <p class="totals" id="totals"></p>
+  <section class="ai-grid" aria-label="GenAI and Agentic AI capabilities">
+    <article class="ai-card">
+      <div class="ai-glow"></div>
+      <div class="ai-icon">🧠</div>
+      <h3>GenAI Copilot</h3>
+      <p>Natural-language infra requests turned into pipeline-ready Terraform, Helm, and IaC diffs.</p>
+    </article>
+    <article class="ai-card">
+      <div class="ai-glow" style="--glow-delay:.5s"></div>
+      <div class="ai-icon">🤖</div>
+      <h3>Agentic Ops</h3>
+      <p>Autonomous agents watch, diagnose, and remediate incidents across clouds without waiting on a human.</p>
+    </article>
+    <article class="ai-card">
+      <div class="ai-glow" style="--glow-delay:1s"></div>
+      <div class="ai-icon">🔍</div>
+      <h3>Root-Cause Reasoning</h3>
+      <p>Multi-step agent chains correlate logs, metrics, and traces to explain <em>why</em>, not just <em>what</em>.</p>
+    </article>
+    <article class="ai-card">
+      <div class="ai-glow" style="--glow-delay:1.5s"></div>
+      <div class="ai-icon">⚡</div>
+      <h3>Self-Healing Pipelines</h3>
+      <p>Failed deploys trigger an agent that rolls back, patches config, and reruns — hands-free.</p>
+    </article>
   </section>
 
-  <section class="panel" aria-labelledby="h-stream">
-    <h2 id="h-stream">Log file contents</h2>
-    <div class="tabs" id="tabs" role="tablist" aria-label="Pick a date"></div>
-    <p class="hint small" id="file-path"></p>
-    <pre class="stream" id="stream" role="log" aria-live="polite" aria-label="Log lines" tabindex="0"></pre>
+  <section class="agent-flow" aria-label="Agentic AI workflow">
+    <h2 class="section-title"><span class="gradient-text">Agentic AI</span> workflow</h2>
+    <div class="flow">
+      <div class="flow-step" style="--step-delay:0s">
+        <div class="flow-icon">👀</div><span>Observe</span>
+      </div>
+      <div class="flow-arrow" style="--step-delay:.2s">➜</div>
+      <div class="flow-step" style="--step-delay:.4s">
+        <div class="flow-icon">🧩</div><span>Reason</span>
+      </div>
+      <div class="flow-arrow" style="--step-delay:.6s">➜</div>
+      <div class="flow-step" style="--step-delay:.8s">
+        <div class="flow-icon">🛠️</div><span>Act</span>
+      </div>
+      <div class="flow-arrow" style="--step-delay:1s">➜</div>
+      <div class="flow-step" style="--step-delay:1.2s">
+        <div class="flow-icon">✅</div><span>Verify</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="cloud-orbit-wrap" aria-label="Connected cloud providers">
+    <div class="cloud-orbit">
+      <div class="hub">
+        <span class="hub-dot"></span>
+      </div>
+      <div class="node node-aws" style="--delay:0s">
+        <span class="node-icon">☁️</span><span class="node-label">AWS</span>
+      </div>
+      <div class="node node-azure" style="--delay:.4s">
+        <span class="node-icon">🌩️</span><span class="node-label">Azure</span>
+      </div>
+      <div class="node node-gcp" style="--delay:.8s">
+        <span class="node-icon">⛅</span><span class="node-label">GCP</span>
+      </div>
+      <div class="node node-k8s" style="--delay:1.2s">
+        <span class="node-icon">☸️</span><span class="node-label">Kubernetes</span>
+      </div>
+      <svg class="orbit-lines" viewBox="0 0 400 400" aria-hidden="true">
+        <circle cx="200" cy="200" r="150" class="orbit-ring" />
+      </svg>
+    </div>
+  </section>
+
+  <section class="feature-grid" aria-label="DevOps capabilities">
+    <h2 class="section-title">Core <span class="gradient-text">DevOps</span> capabilities</h2>
+    <div class="grid-body">
+    <article class="feature-card">
+      <div class="feature-icon pulse">🚀</div>
+      <h3>CI/CD Pipelines</h3>
+      <p>Automated build, test, and deploy across every cloud target from a single workflow.</p>
+    </article>
+    <article class="feature-card">
+      <div class="feature-icon pulse" style="--pulse-delay:.3s">🛡️</div>
+      <h3>Security &amp; Compliance</h3>
+      <p>Policy-as-code guardrails enforced consistently across AWS, Azure, and GCP.</p>
+    </article>
+    <article class="feature-card">
+      <div class="feature-icon pulse" style="--pulse-delay:.6s">📈</div>
+      <h3>Observability</h3>
+      <p>Access and error activity is captured and retained on the server for every request.</p>
+    </article>
+    <article class="feature-card">
+      <div class="feature-icon pulse" style="--pulse-delay:.9s">🔄</div>
+      <h3>Infra as Code</h3>
+      <p>Provision and reconcile infrastructure across providers with a single source of truth.</p>
+    </article>
+    </div>
+  </section>
+
+  <section class="ticker-wrap" aria-hidden="true">
+    <div class="ticker">
+      <span>AWS</span><span>Azure</span><span>Google Cloud</span><span>Kubernetes</span>
+      <span>Terraform</span><span>Docker</span><span>Jenkins</span><span>GitHub Actions</span>
+      <span>AWS</span><span>Azure</span><span>Google Cloud</span><span>Kubernetes</span>
+      <span>Terraform</span><span>Docker</span><span>Jenkins</span><span>GitHub Actions</span>
+    </div>
+  </section>
+
+  <section class="db-panel" aria-labelledby="h-db">
+    <h2 id="h-db" class="section-title">Database <span class="gradient-text">connectivity</span> check</h2>
+    <p class="hint center">
+      Enter real credentials to test a live connection. Correct credentials log a success
+      entry to the server's access log; wrong credentials log a failure to the error log.
+      Passwords are never written to any log.
+    </p>
+    <form id="db-form" class="db-form" autocomplete="off">
+      <div class="field">
+        <label for="db-engine">Engine</label>
+        <select id="db-engine" name="engine">
+          <option value="mysql">MySQL</option>
+          <option value="postgres">PostgreSQL</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="db-host">Host</label>
+        <input id="db-host" name="host" type="text" placeholder="localhost" required>
+      </div>
+      <div class="field">
+        <label for="db-port">Port</label>
+        <input id="db-port" name="port" type="number" placeholder="3306">
+      </div>
+      <div class="field">
+        <label for="db-name">Database</label>
+        <input id="db-name" name="database" type="text" placeholder="mydb" required>
+      </div>
+      <div class="field">
+        <label for="db-user">Username</label>
+        <input id="db-user" name="user" type="text" placeholder="root" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="db-pass">Password</label>
+        <input id="db-pass" name="password" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn-test" id="db-submit">Test connection</button>
+    </form>
+    <p id="db-result" class="db-result" role="status" aria-live="polite"></p>
   </section>
 
 </main>
 
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<footer class="footer">
+  <p>Multicloud DevOps Portal &middot; by Veera Sir, NIT</p>
+</footer>
+
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
