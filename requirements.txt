@@ -1,3 +1,5 @@
-streamlit
 boto3
+streamlit
 langchain-aws
+langchain-google-genai
+google-genai
