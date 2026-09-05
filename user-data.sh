@@ -32,7 +32,7 @@ cat > "$CFG" <<'CFG_JSON'
         "collect_list": [
           {
             "file_path": "/var/log/myapp/*.log",
-            "log_group_name": "/workshop/app/logs",
+            "log_group_name": "/nareshit/devops",
             "log_stream_name": "{instance_id}",
             "timestamp_format": "%Y-%m-%d %H:%M:%S,%f",
             "timezone": "UTC",
