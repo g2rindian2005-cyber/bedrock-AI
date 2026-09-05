@@ -10,7 +10,7 @@ cat > /opt/aws/amazon-cloudwatch-agent/bin/config.json <<'EOF'
         "collect_list": [
           {
             "file_path": "/var/log/myapp/*.log",
-            "log_group_name": "LOG-FROM-EC2",
+            "log_group_name": "/nareshit/devops",
             "log_stream_name": "{instance_id}",
             "retention_in_days": 1
           }
