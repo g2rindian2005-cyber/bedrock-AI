@@ -10,9 +10,9 @@
 set -euxo pipefail
 
 LOG_DIR=/var/log/myapp
-CFG=/opt/aws/amazon-cloudwatch-agent/etc/cw-config.json
+CFG=/opt/aws/amazon-cloudwatch-agent/bin/config.json
 
-dnf install -y amazon-cloudwatch-agent
+yum install amazon-cloudwatch-agent -y
 
 # Created up front so the agent has something to watch and so the app can write
 # here later without a root-owned-parent surprise.
@@ -46,7 +46,6 @@ cat > "$CFG" <<'CFG_JSON'
 CFG_JSON
 
 # fetch-config loads the file and -s starts the agent; it also survives reboots.
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-  -a fetch-config -m ec2 -s -c file:"$CFG"
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:"$CFG"
 
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
