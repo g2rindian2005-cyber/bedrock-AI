@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log Forge — backdated log generator</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body
+  data-days-back="{{ days_back }}"
+  data-log-group="{{ log_group }}"
+  data-region="{{ region }}">
+
+<a class="skip" href="#main">Skip to main content</a>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">◆</span>
+    <div>
+      <h1>Log Forge</h1>
+      <p class="tag">Every visit writes logs across the last {{ days_back }} days &rarr; CloudWatch</p>
+    </div>
+  </div>
+  <dl class="meta">
+    <div><dt>Log group</dt><dd>{{ log_group }}</dd></div>
+    <div><dt>Region</dt><dd>{{ region }}</dd></div>
+  </dl>
+  <p id="ship-pill" class="pill" role="status">
+    <span class="dot" aria-hidden="true"></span><span id="ship-text">connecting…</span>
+  </p>
+</header>
+
+<main id="main">
+
+  <section class="panel controls" aria-labelledby="h-generate">
+    <h2 id="h-generate">Generate traffic</h2>
+    <p class="hint">
+      Each hit produces events on <strong>every</strong> day in the window, not just today.
+      Page load already generated <strong>{{ boot.events_generated }}</strong> events
+      across <strong>{{ boot.days_touched }}</strong> dates.
+    </p>
+
+    <div class="routes" role="group" aria-label="Simulate a request to an endpoint">
+      {% for r in routes %}
+      <button class="btn route" data-route="{{ r }}">{{ r }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="burst">
+      <label for="burst-count">Burst size
+        <output id="burst-out" for="burst-count">10</output> visits
+      </label>
+      <input type="range" id="burst-count" min="1" max="60" value="10" step="1">
+      <button class="btn primary" id="burst-go">Run burst</button>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-timeline">
+    <h2 id="h-timeline">Log volume by date</h2>
+    <p class="hint">
+      Each date has a fixed character, so the same day always tells the same story.
+      <span class="badge incident">incident</span>
+      <span class="badge degraded">degraded</span>
+      <span class="badge healthy">healthy</span>
+    </p>
+    <ol class="timeline" id="timeline" aria-live="polite"></ol>
+    <p class="totals" id="totals"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-stream">
+    <h2 id="h-stream">Log file contents</h2>
+    <div class="tabs" id="tabs" role="tablist" aria-label="Pick a date"></div>
+    <p class="hint small" id="file-path"></p>
+    <pre class="stream" id="stream" role="log" aria-live="polite" aria-label="Log lines" tabindex="0"></pre>
+  </section>
+
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
