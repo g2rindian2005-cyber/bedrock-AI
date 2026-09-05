@@ -73,6 +73,8 @@ cd <REPOSITORY-DIRECTORY>
 ## 3. Install Required Packages
 
 ```bash
+yum install git -y
+
 yum install python3-pip -y
 
 curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
