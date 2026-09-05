@@ -1,5 +1,10 @@
+import sys
+
 import boto3
+import streamlit as st
 from datetime import datetime, timedelta, timezone
+
+from cw_lang import analyze_logs
 
 
 def list_log_groups(region):
@@ -63,3 +68,141 @@ def fetch_logs_by_date(region, log_group, target_date, limit=1000):
         kwargs["nextToken"] = next_token
 
     return events
+
+
+def render_ui():
+
+    st.set_page_config(
+        page_title="CloudWatch Log Analyzer",
+        page_icon="📊",
+        layout="wide"
+    )
+
+    st.title("📊 CloudWatch Log Analyzer")
+
+    region = st.text_input(
+        "AWS Region",
+        "us-east-1"
+    )
+
+    # Auto-fetch log groups for the selected region
+    try:
+        log_groups = list_log_groups(region)
+    except Exception as e:
+        log_groups = []
+        st.error(f"Could not fetch log groups: {e}")
+
+    if log_groups:
+        log_group = st.selectbox(
+            "CloudWatch Log Group",
+            log_groups
+        )
+    else:
+        st.warning("No log groups found (or unable to list). Enter one manually.")
+        log_group = st.text_input(
+            "CloudWatch Log Group",
+            "/aws/lambda/my-function"
+        )
+
+    fetch_mode = st.radio(
+        "Fetch logs by",
+        ["Last N hours", "Specific date"],
+        horizontal=True
+    )
+
+    if fetch_mode == "Last N hours":
+        hours = st.slider(
+            "Last N hours",
+            1,
+            72,
+            2
+        )
+        selected_date = None
+    else:
+        selected_date = st.date_input(
+            "Date (UTC)",
+            datetime.now(timezone.utc).date() - timedelta(days=1)
+        )
+        hours = None
+
+    question = st.text_input(
+        "Ask about the logs",
+        "Why did the application fail?"
+    )
+
+    if st.button("Fetch & Analyze"):
+
+        # 1. Get logs from CloudWatch
+        with st.spinner("Fetching logs from CloudWatch..."):
+            if fetch_mode == "Last N hours":
+                events = fetch_logs(
+                    region,
+                    log_group,
+                    hours
+                )
+            else:
+                events = fetch_logs_by_date(
+                    region,
+                    log_group,
+                    selected_date
+                )
+
+        if not events:
+            st.warning("No logs found.")
+            st.stop()
+
+        # Format each event with a readable timestamp
+        formatted_events = []
+        for event in events:
+            ts = datetime.fromtimestamp(
+                event["timestamp"] / 1000,
+                tz=timezone.utc
+            ).strftime("%Y-%m-%d %H:%M:%S UTC")
+            formatted_events.append({
+                "Timestamp": ts,
+                "Message": event["message"].rstrip()
+            })
+
+        logs = "\n".join(
+            f"[{e['Timestamp']}] {e['Message']}"
+            for e in formatted_events
+        )
+
+        # 2. Display logs
+        st.subheader("CloudWatch Logs")
+        st.dataframe(
+            formatted_events,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # 3. Send logs to Bedrock through LangChain
+        with st.spinner("Analyzing logs with Amazon Bedrock..."):
+            answer = analyze_logs(
+                region,
+                logs,
+                question
+            )
+
+        # 4. Display AI response
+        st.subheader("🤖 Bedrock Analysis")
+        st.write(answer)
+
+
+if __name__ == "__main__":
+    # Allow running directly via `python app.py`, which re-launches
+    # itself under `streamlit run` bound to 0.0.0.0:8082 so the UI is
+    # reachable from outside the host (e.g. an EC2 instance).
+    if st.runtime.exists():
+        render_ui()
+    else:
+        from streamlit.web import cli as stcli
+
+        sys.argv = [
+            "streamlit",
+            "run",
+            sys.argv[0],
+            "--server.address=0.0.0.0",
+            "--server.port=8082",
+        ]
+        sys.exit(stcli.main())
