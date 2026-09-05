@@ -1,21 +1,8 @@
 #!/bin/bash
 
-# EC2 User Data - Amazon Linux 2023
-# Installs and starts the CloudWatch Agent
+yum install amazon-cloudwatch-agent -y
 
-set -euxo pipefail
-
-LOG_DIR=/var/log/myapp
-CFG=/opt/aws/amazon-cloudwatch-agent/bin/config.json
-
-# Install CloudWatch Agent
-yum install -y amazon-cloudwatch-agent
-
-# Create application log directory
-mkdir -p "$LOG_DIR"
-
-# Create CloudWatch Agent configuration
-cat > "$CFG" <<'CFG_JSON'
+cat > /opt/aws/amazon-cloudwatch-agent/bin/config.json <<'EOF'
 {
   "logs": {
     "logs_collected": {
@@ -25,24 +12,17 @@ cat > "$CFG" <<'CFG_JSON'
             "file_path": "/var/log/myapp/*.log",
             "log_group_name": "LOG-FROM-EC2",
             "log_stream_name": "{instance_id}",
-            "retention_in_days": 5
+            "retention_in_days": 1
           }
         ]
       }
     }
   }
 }
-CFG_JSON
+EOF
 
-# Set permissions so the CloudWatch Agent can read the logs
-chmod 755 "$LOG_DIR"
-
-# Load configuration and start CloudWatch Agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-  -a fetch-config \
-  -m ec2 \
-  -c file:"$CFG" \
-  -s
-
-# Check CloudWatch Agent status
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
+-a fetch-config \
+-m ec2 \
+-c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json \
+-s
