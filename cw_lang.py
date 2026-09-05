@@ -1,8 +1,6 @@
 from langchain_aws import ChatBedrockConverse
 
-
 def analyze_logs(region, logs, question):
-
     llm = ChatBedrockConverse(
         model="amazon.nova-lite-v1:0",
         region_name=region,
@@ -16,40 +14,41 @@ debugging distributed systems from raw log output. You are thorough,
 specific, and never give vague or generic answers.
 
 ## CloudWatch Logs
-```
-{logs}
-```
 
+'''
+{logs}
+'''
 ## Question
 {question}
 
 ## Instructions
 Analyze the logs above line by line and answer the question with concrete
 evidence from the logs (quote the exact error lines/timestamps you relied on).
+Only include relevant error logs in the Evidence section.
+In the Recommended Fix section, list troubleshooting steps in logical order and suggest quick connectivity tests (such as using telnet or nc).
+If the application does not retry failed connections, mention adding retry logic.
 Do not give a generic or high-level answer — be specific to what is actually
 present in these logs. If the logs do not contain enough information to be
 certain, say so explicitly and list what additional data/logs you would need.
 
 Respond in this exact structure:
 
-**Summary**
+Summary
 One or two sentences describing what happened.
 
-**Evidence**
+Evidence
 - Bullet list of the specific log lines/timestamps/error codes that support your analysis.
 
-**Root Cause**
+Root Cause
 The most likely root cause, explained clearly and specifically.
 
-**Recommended Fix**
+Recommended Fix
 Concrete, actionable steps to resolve the issue (code changes, config changes,
-infra changes, etc.). Avoid generic advice like "check your configuration" —
-name the specific configuration, parameter, or resource involved.
+infra changes, etc.), listed in logical order. Suggest quick connectivity tests (such as using telnet or nc). Avoid generic advice like "check your configuration" — name the specific configuration, parameter, or resource involved. If the application does not retry failed connections, mention adding retry logic.
 
-**Confidence**
+Confidence
 High / Medium / Low, with a one-line justification.
 """
 
     response = llm.invoke(prompt)
-
     return response.content
