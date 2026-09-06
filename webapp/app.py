@@ -1,5 +1,5 @@
 """
-Multicloud DevOps Portal
+Multicloud AI-DevOps Portal
 by Veera Sir, NIT
 
 A small Flask app that records real access logs and error logs for every
