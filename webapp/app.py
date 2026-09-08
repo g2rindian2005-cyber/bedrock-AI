@@ -1,6 +1,6 @@
 """
 Multicloud AI-DevOps Portal
-by Veera Sir, NIT
+by gokul rathod
 
 A small Flask app that records real access logs and error logs for every
 request it serves, and writes them to local files on the server only.
